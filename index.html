@@ -122,31 +122,53 @@
 
     // ── 6) CAST VOTE (one per password) ──────────────────────────
     async function castVote(id, name) {
-      // prevent double-voting
-      const { data: existing } = await supabase
+      // see if this password has already voted
+      const { data: existing, error: selErr } = await supabase
         .from('votes')
         .select('id')
         .eq('password', currentPassword)
         .limit(1);
 
-      if (existing.length) {
-        messageDiv.textContent = 'You have already voted!';
+      if (selErr) {
+        console.error('Select error', selErr);
+        messageDiv.textContent = 'Error—please try again';
         return;
       }
-      // record vote
-      const { error } = await supabase
-        .from('votes')
-        .insert({
-          startup_id:   id,
-          startup_name: name,
-          password:     currentPassword
-        });
 
-      if (error) {
-        console.error(error);
-        messageDiv.textContent = 'Error—please try again';
+      if (existing.length) {
+        // update the existing vote
+        const voteId = existing[0].id;
+        const { error: updErr } = await supabase
+          .from('votes')
+          .update({
+            startup_id:   id,
+            startup_name: name,
+            password:     currentPassword  // re-include for RLS checks
+          })
+          .eq('id', voteId);
+
+        if (updErr) {
+          console.error('Update error', updErr);
+          messageDiv.textContent = 'Error updating vote';
+        } else {
+          messageDiv.textContent = '✅ Your vote has been updated!';
+        }
       } else {
-        messageDiv.textContent = '✅ Thanks for voting!';
+        // create a new vote
+        const { error: insErr } = await supabase
+          .from('votes')
+          .insert({
+            startup_id:   id,
+            startup_name: name,
+            password:     currentPassword
+          });
+
+        if (insErr) {
+          console.error('Insert error', insErr);
+          messageDiv.textContent = 'Error—please try again';
+        } else {
+          messageDiv.textContent = '✅ Thanks for voting!';
+        }
       }
     }
   </script>

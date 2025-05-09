@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>📊 Voting Results</title>
+
+  <!-- Bootstrap 5 CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Verdana, sans-serif;
+    }
+    .card {
+      border-radius: 1rem;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      max-width: 700px;
+      width: 90%;
+    }
+    #winner {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    #loader {
+      height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card p-4">
+    <h2 class="text-center mb-3">🚀 Startup Voting Results</h2>
+    <p id="winner" class="text-center text-primary mb-4">Loading results…</p>
+    <div id="loader">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+    <canvas id="resultsChart" class="d-none"></canvas>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    // ── YOUR Supabase credentials ───────────────────────────────────
+    const SUPA_URL = 'https://qufzvewvjwdxzbapnbot.supabase.co';
+    const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1Znp2ZXd2andkeHpiYXBuYm90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY4MDUwNzYsImV4cCI6MjA2MjM4MTA3Nn0.3VKom99x6ZksF7hXnPXRIstrpV07qc3fQO1SSfByKkI'; // safe in frontend
+    const supabase = createClient(SUPA_URL, SUPA_KEY);
+
+    async function loadResults() {
+      // 1) Fetch all votes
+      const { data: votes, error } = await supabase
+        .from('votes')
+        .select('startup_name');
+
+      if (error) {
+        document.getElementById('winner').textContent = 'Error loading results.';
+        console.error(error);
+        return;
+      }
+
+      // 2) Tally counts per startup
+      const counts = {};
+      votes.forEach(v => {
+        counts[v.startup_name] = (counts[v.startup_name] || 0) + 1;
+      });
+
+      // 3) Sort descending
+      const entries = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1]);
+
+      if (entries.length === 0) {
+        document.getElementById('winner').textContent = 'No votes yet.';
+        return;
+      }
+
+      const [winningName, winningCount] = entries[0];
+      // 4) Show winner
+      document.getElementById('winner').textContent =
+        `🏆 Winner: ${winningName} (${winningCount} vote${winningCount > 1 ? 's' : ''})`;
+
+      // 5) Prepare chart data
+      const labels = entries.map(e => e[0]);
+      const data = entries.map(e => e[1]);
+
+      // 6) Render Chart.js Bar chart
+      const ctx = document.getElementById('resultsChart');
+      document.getElementById('loader').classList.add('d-none');
+      ctx.classList.remove('d-none');
+
+      new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Votes',
+            data,
+            backgroundColor: labels.map((_, i) =>
+              `hsla(${(i*60)%360}, 70%, 50%, 0.6)`
+            ),
+            borderColor: labels.map((_, i) =>
+              `hsla(${(i*60)%360}, 70%, 40%, 1)`
+            ),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} vote${ctx.parsed.y>1?'s':''}` } }
+          }
+        }
+      });
+    }
+
+    // Kick off
+    loadResults();
+  </script>
+</body>
+</html>
